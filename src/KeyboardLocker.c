@@ -30,6 +30,7 @@ char* lastStr;
 
 void setBlocked(bool);
 void enable();
+void disable();
 
 void init() {
 	lastStr = malloc((LAST_COUNT + 1) * S_CHAR);
@@ -38,10 +39,17 @@ void init() {
 
 void handleKeyDown(char keyChar) {
 	char tempStr[LAST_COUNT];
+
+	// copy from index 1 to the end of lastKeyChars to tempStr
 	memcpy(tempStr, lastKeyChars + 1, LAST_COUNT-1);
+
+	// add the new char to the end
 	tempStr[LAST_COUNT-1] = keyChar;
+
+	// copy it all back into lastKeyChars
 	memcpy(lastKeyChars, tempStr, LAST_COUNT);
 
+	// also copy it over to lastStr and append a null terminator to make it a string
 	memcpy(lastStr, lastKeyChars, LAST_COUNT);
 	lastStr[LAST_COUNT] = '\0';
 }
@@ -102,6 +110,5 @@ void setBlocked(bool blockKeyboard) {
 	}
 }
 
-void enable() {
-	setBlocked(true);
-}
+void enable() { setBlocked(true); }
+void disable() { setBlocked(false); }
