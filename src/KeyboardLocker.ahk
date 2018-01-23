@@ -12,8 +12,9 @@ Init() {
 		ExitApp
 	}
 
-	global lockedIconHandle := LoadPicture("locked.ico", "16w 16h", IMAGE_ICON)
-	global unlockedIconHandle := LoadPicture("unlocked.ico", "16w 16h", IMAGE_ICON)
+	; icons are embedded into the custom BIN file used to compile this AHK file
+	global lockedIconHandle := LoadPicture(A_ScriptName, "Icon6 16w 16h", IMAGE_ICON)
+	global unlockedIconHandle := LoadPicture(A_ScriptName, "Icon7 16w 16h", IMAGE_ICON)
 
 	CallFunc("setCallback", "ptr", RegisterCallback("OnUpdate", "", 1))
 
