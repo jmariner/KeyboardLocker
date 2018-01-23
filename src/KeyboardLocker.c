@@ -2,13 +2,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <string.h>
 #include <windows.h>
 
-#define DEBUG true
-#define DISABLE_STR "UNLOCK"
-#define LAST_COUNT 6
-#define S_CHAR sizeof(char)
+#define DEBUG false
+#define UNLOCK_STR "UNLOCK"
+#define UNLOCK_LEN 6
 
 // constants
 int KEY_WHITELIST[] = {
@@ -21,86 +19,93 @@ int KEY_WHITELIST[] = {
 	VK_MEDIA_PLAY_PAUSE
 };
 int WHITELIST_SIZE = sizeof(KEY_WHITELIST) / sizeof(KEY_WHITELIST[0]);
+typedef void (*update_callback)(int);
 
 // globals
-bool ready = false;
-HHOOK hook;
-char lastKeyChars[LAST_COUNT] = { 0 }; // the last LAST_COUNT keypresses. non-chars become zero
-char* lastStr;
+HHOOK hook = NULL;
+bool lockStatus = false;
+int disableStrCount = 0;
+update_callback onUpdate = NULL;
 
-void setBlocked(bool);
-void enable();
-void disable();
-
-void init() {
-	lastStr = malloc((LAST_COUNT + 1) * S_CHAR);
-	ready = true;
-}
+void setLocked(bool);
+void setCallback(update_callback);
 
 void handleKeyDown(char keyChar) {
-	char tempStr[LAST_COUNT];
+	if (keyChar == UNLOCK_STR[disableStrCount]) {
 
-	// copy from index 1 to the end of lastKeyChars to tempStr
-	memcpy(tempStr, lastKeyChars + 1, LAST_COUNT-1);
+		#if DEBUG
+			printf("Unlock key pressed: '%c'\n", keyChar);
+		#endif
 
-	// add the new char to the end
-	tempStr[LAST_COUNT-1] = keyChar;
+		disableStrCount++;
 
-	// copy it all back into lastKeyChars
-	memcpy(lastKeyChars, tempStr, LAST_COUNT);
-
-	// also copy it over to lastStr and append a null terminator to make it a string
-	memcpy(lastStr, lastKeyChars, LAST_COUNT);
-	lastStr[LAST_COUNT] = '\0';
-}
-
-// LowLevelKeyboardProc
-LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
-
-	bool block = false;
-
-	if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_KEYUP)) {
-
-		KBDLLHOOKSTRUCT data = *((KBDLLHOOKSTRUCT*)lParam);
-		char keyChar = MapVirtualKey(data.vkCode, MAPVK_VK_TO_CHAR);
-
-		block = true;
-		for (int i = 0; i < WHITELIST_SIZE; i++) {
-			if (KEY_WHITELIST[i] == data.vkCode) {
-				block = false;
-				break;
-			}
-		}
-
-		if (wParam == WM_KEYDOWN) {
-
-			handleKeyDown(keyChar);
-
-			if (DEBUG) {
-
-				printf("vkCode: %03d (%#02x) char: \'%c\'\n",
-					data.vkCode, data.vkCode,
-					keyChar
-				);
-
-				printf("lastStr: \"%s\"\n", lastStr);
-			}
-		}
-		else {
-			if (strcmp(lastStr, DISABLE_STR) == 0)
-				setBlocked(false);
+		if (disableStrCount == UNLOCK_LEN) {
+			setLocked(false);
+			disableStrCount = 0;
 		}
 
 	}
-
-	return block ? 1 : CallNextHookEx(hook, nCode, wParam, lParam);
+	else {
+		disableStrCount = 0;
+	}
 }
 
-void setBlocked(bool blockKeyboard) {
+// callback for key press. format: LowLevelKeyboardProc
+LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
 
-	if (!ready) init();
+	// by default allow everything so only the correct keydown and keyup are blocked
+	bool whitelisted = true;
 
-	if (blockKeyboard) {
+	if (lockStatus) {
+		if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_KEYUP)) {
+
+			KBDLLHOOKSTRUCT data = *((KBDLLHOOKSTRUCT*)lParam);
+			char keyChar = MapVirtualKey(data.vkCode, MAPVK_VK_TO_CHAR);
+
+			whitelisted = false;
+			for (int i = 0; i < WHITELIST_SIZE; i++) {
+				if (KEY_WHITELIST[i] == data.vkCode) {
+					whitelisted = true;
+					break;
+				}
+			}
+
+			if (wParam == WM_KEYDOWN) {
+
+				#if DEBUG
+					printf("code: %3d (%#02x) key: '%c' blocked: %s\n",
+						data.vkCode, data.vkCode,
+						keyChar == '\r' || keyChar == '\b' ? '\0' : keyChar,
+						whitelisted ? "false" : "true"
+					);
+				#endif
+
+				handleKeyDown(keyChar);
+			}
+
+		}
+	}
+	else {
+		// This is here to see if the keyboard unhooking is ever too slow to be
+		// ready for the next key press.
+		#if DEBUG
+			printf("Keyboard input received while disabled.");
+		#endif
+	}
+
+	return whitelisted ? CallNextHookEx(hook, nCode, wParam, lParam) : 1;
+}
+
+// enable or disable keyboard locking
+void setLocked(bool lockKeyboard) {
+
+	lockStatus = lockKeyboard;
+
+	#if DEBUG
+		printf("Keyboard lock %sabled.\n", lockStatus ? "en" : "dis");
+	#endif
+
+	if (lockStatus) {
 		if (hook == NULL)
 			hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardHookCallback, NULL, 0);
 	}
@@ -108,7 +113,12 @@ void setBlocked(bool blockKeyboard) {
 		UnhookWindowsHookEx(hook);
 		hook = NULL;
 	}
+
+	if (onUpdate != NULL)
+		(*onUpdate)( (int) lockStatus );
 }
 
-void enable() { setBlocked(true); }
-void disable() { setBlocked(false); }
+// function to set the update callback
+void setCallback(update_callback updateCb) {
+	onUpdate = updateCb;
+}

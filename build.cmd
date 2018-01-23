@@ -18,10 +18,11 @@ if NOT "%errorlevel%" == "0" (
 echo Converting to DLL...
 gcc -shared -o out/%NAME%.dll out/%NAME%.o
 
+: echo Killing EXE...
+: taskkill /IM %NAME%.exe > NUL 2> NUL
 : echo Building EXE...
 : gcc -o out/%NAME%.exe src/%NAME%_runner.c -L./out -l%NAME%
 
-: echo Building AHK EXE...
-: build-ahk
+build-ahk
 
-: echo Building Complete.
+echo Building Complete.
