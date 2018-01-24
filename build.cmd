@@ -2,11 +2,17 @@
 
 set NAME=KeyboardLocker
 
+del out/%NAME%.exe 2>NUL
+
+cd lib
+
 echo Cleaning output directory...
-del out\%NAME%.* 2> NUL
+for %%x in (dll,o) do (
+	del %NAME%.%%x 2>NUL
+)
 
 echo Compiling C...
-gcc -c src/%NAME%.c -o out/%name%.o
+gcc -c %NAME%.c -o %NAME%.o
 
 : check if compilation failed
 if NOT "%errorlevel%" == "0" (
@@ -16,13 +22,10 @@ if NOT "%errorlevel%" == "0" (
 )
 
 echo Converting to DLL...
-gcc -shared -o out/%NAME%.dll out/%NAME%.o
+gcc -shared -o %NAME%.dll %NAME%.o
 
-: echo Killing EXE...
-: taskkill /IM %NAME%.exe > NUL 2> NUL
-: echo Building EXE...
-: gcc -o out/%NAME%.exe src/%NAME%_runner.c -L./out -l%NAME%
+del %NAME%.o 2> NUL
+
+cd ..
 
 build-ahk
-
-echo Building Complete.
