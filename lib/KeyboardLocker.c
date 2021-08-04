@@ -57,7 +57,12 @@ LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
 	bool whitelisted = true;
 
 	if (lockStatus) {
-		if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_KEYUP)) {
+		if (
+			nCode == HC_ACTION && (
+				wParam == WM_KEYDOWN || wParam == WM_KEYUP ||
+				wParam == WM_SYSKEYDOWN || wParam == WM_SYSKEYUP
+			)
+		) {
 
 			KBDLLHOOKSTRUCT data = *((KBDLLHOOKSTRUCT*)lParam);
 			char keyChar = MapVirtualKey(data.vkCode, MAPVK_VK_TO_CHAR);
