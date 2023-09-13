@@ -116,6 +116,7 @@ OnUpdate(newStatus) {
 	Menu, Tray, Icon, % stat.Icon,, 1
 	Menu, Tray, % stat.CheckMode, 3&
 
+	SoundPlay, *-1
 }
 
 Noop() {
