@@ -1,3 +1,3 @@
-*.sublime-*
 out/*.exe
 lib/*.dll
+tests/
