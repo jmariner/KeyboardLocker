@@ -4,7 +4,7 @@ set NAME=KeyboardLocker
 
 del out/%NAME%.exe 2>NUL
 
-cd lib
+cd %~dp0\lib
 
 echo Cleaning output directory...
 for %%x in (dll,o) do (
