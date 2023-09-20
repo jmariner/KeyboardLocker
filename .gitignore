@@ -1,2 +1,4 @@
 lib/*.dll
-tests/
+/tests
+/build
+/vcpkg

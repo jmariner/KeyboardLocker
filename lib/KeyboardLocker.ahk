@@ -22,8 +22,8 @@ Init() {
 
 	; icons are embedded into the custom BIN file used to compile this AHK file
 	exeIcon := LoadPicture(A_ScriptName, "Icon0 32w 32h", IMAGE_ICON)
-	global lockedIconHandle := LoadPicture(A_ScriptName, "Icon6 16w 16h", IMAGE_ICON)
-	global unlockedIconHandle := LoadPicture(A_ScriptName, "Icon7 16w 16h", IMAGE_ICON)
+	global lockedIconHandle := LoadPicture(A_ScriptName, "Icon2 16w 16h", IMAGE_ICON)
+	global unlockedIconHandle := LoadPicture(A_ScriptName, "Icon3 16w 16h", IMAGE_ICON)
 
 	CallFunc("setCallback", "ptr", RegisterCallback("OnUpdate", "", 1))
 

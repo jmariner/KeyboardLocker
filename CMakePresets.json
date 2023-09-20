@@ -1,0 +1,35 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "makefile",
+            "displayName": "Makefile",
+            "description": "Basic Makefile",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "MinGW Makefiles",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "FILEPATH",
+                    "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                },
+                "LIBRARY_OUTPUT_NAME": {
+                    "type": "STRING",
+                    "value": "${PROJECT_NAME}"
+                }
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "makefile-build",
+            "configurePreset": "makefile",
+            "displayName": "Build",
+            "description": "Build with Makefile"
+        }
+    ]
+}
