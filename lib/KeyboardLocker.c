@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <windows.h>
+#include <czmq.h>
 
 #define DEBUG false
 #define UNLOCK_STR "UNLOCK"
 #define UNLOCK_LEN 6
+#define PORT 5555
 
 // constants
 int KEY_WHITELIST[] = {
@@ -26,9 +28,25 @@ HHOOK hook = NULL;
 bool lockStatus = false;
 int disableStrCount = 0;
 update_callback onUpdate = NULL;
+zsock_t* publisher = NULL;
 
+void init();
 void setLocked(bool);
 void setCallback(update_callback);
+
+void init() {
+	// TODO building with cmake results in czmq dll being outputted separately from main dll, resulting in ahk not loading it.
+	// might just need to drop AHK and make a c/c++ EXE instead
+
+	// create publisher socket on port PORT
+	publisher = zsock_new(ZMQ_PUB);
+    int rc = zsock_connect(publisher, "tcp://localhost:%d", PORT);
+    assert(rc == PORT);
+
+	#if DEBUG
+		printf("Publisher created on port %d.\n", PORT);
+	#endif
+}
 
 void handleKeyDown(char keyChar) {
 	if (keyChar == UNLOCK_STR[disableStrCount]) {
@@ -104,6 +122,7 @@ LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
 // enable or disable keyboard locking
 void setLocked(bool lockKeyboard) {
 
+	bool changed = lockStatus != lockKeyboard;
 	lockStatus = lockKeyboard;
 
 	#if DEBUG
@@ -118,6 +137,9 @@ void setLocked(bool lockKeyboard) {
 		UnhookWindowsHookEx(hook);
 		hook = NULL;
 	}
+
+	if (changed && publisher != NULL)
+		zstr_sendx(publisher, "ChangeKeyboardLockState", lockStatus ? "true" : "false", NULL);
 
 	if (onUpdate != NULL)
 		(*onUpdate)( (int) lockStatus );

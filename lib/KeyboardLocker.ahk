@@ -25,6 +25,7 @@ Init() {
 	global lockedIconHandle := LoadPicture(A_ScriptName, "Icon2 16w 16h", IMAGE_ICON)
 	global unlockedIconHandle := LoadPicture(A_ScriptName, "Icon3 16w 16h", IMAGE_ICON)
 
+	CallFunc("init")
 	CallFunc("setCallback", "ptr", RegisterCallback("OnUpdate", "", 1))
 
 	; === set up tray icon ===
