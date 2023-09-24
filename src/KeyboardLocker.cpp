@@ -24,13 +24,14 @@ std::vector<int> KEY_WHITELIST = {
     VK_VOLUME_MUTE, VK_VOLUME_DOWN, VK_VOLUME_UP, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PREV_TRACK, VK_MEDIA_STOP, VK_MEDIA_PLAY_PAUSE};
 
 // globals
+bool running = true;
 HHOOK hook = NULL;
 bool initialized = false;
 bool lockStatus = false;
 int disableStrCount = 0;
 int activeModifierKeys = 0;
 bool lockKeybindPressed = false;
-zsock_t *publisher = NULL;
+zsock_t *outSocket = NULL;
 Tray::Tray *trayPtr;
 std::shared_ptr<Tray::Label> trayTitleLabelPtr;
 std::shared_ptr<Tray::Toggle> trayMainTogglePtr;
@@ -122,11 +123,6 @@ LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
 			lockKeybindPressed = false;
 			setLocked(true);
 		}
-
-#if DEBUG
-		if (activeModifierKeys > 0 && keyChar != 0)
-			std::cout << "Key " << keyChar << (isKeyUp ? " UP" : " DOWN") << " pressed with modifiers: " << activeModifierKeys << std::endl;
-#endif
 	}
 
 	return blockKey ? 1 : CallNextHookEx(hook, nCode, wParam, lParam);
@@ -151,8 +147,8 @@ void setLocked(bool lockKeyboard) {
 
 	if (changed || !initialized) {
 		// update publisher if it exists
-		if (publisher != NULL) {
-			zstr_sendx(publisher, "ChangeKeyboardLockState", lockStatus ? "true" : "false", NULL);
+		if (outSocket != NULL) {
+			zstr_sendx(outSocket, "ChangeKeyboardLockState", lockStatus ? "true" : "false", NULL);
 		}
 	}
 
@@ -161,38 +157,54 @@ void setLocked(bool lockKeyboard) {
 #endif
 }
 
+void doExit() {
+	trayPtr->exit();
+	running = false;
+}
+
 int main(int argc, char **argv) {
 
 	// set up keyboard hook
 	hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardHookCallback, NULL, 0);
 
-	// parse args until -p or --port is found, then convert next arg to int
-	int port = DEF_PORT;
+	// parse args until -p or --port is found, then read next arg as 2 comma-separated port numbers
+	int outPort = DEF_PORT;
+	int inPort = -1;
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) {
 			if (i + 1 < argc) {
-				port = atoi(argv[i + 1]);
-				break;
+				char *portStr = argv[i + 1];
+				char *port2Str = strchr(portStr, ',');
+				if (port2Str != NULL) {
+					*port2Str = '\0';
+					port2Str++;
+					inPort = atoi(port2Str);
+				}
+				outPort = atoi(portStr);
 			}
+			break;
 		}
 	}
 
-	/*
-	On PUB/SUB vs REQ/REP:
-	  * PUB sends blind messages and doesn't need a reply, which is be ideal here,
-	    except that it doesn't guarantee that the message will be received.
-	    This also means PUB cannot send a message immediately after starting since it may not be connected yet.
-	  * REQ puts messages into a buffer so that they can be received later, which is be ideal here,
-	    but needs to receive a reply after every send, creating some kind of lag/hang when not connected while stuck waiting for a reply.
-	*/
+	if (inPort == -1)
+		inPort = outPort + 1;
 
-	// create publisher socket on port
-	publisher = zsock_new(ZMQ_PUB);
-	int rc = zsock_connect(publisher, "tcp://localhost:%d", port);
+	// create output socket on port outPort
+	outSocket = zsock_new(ZMQ_REQ);
+	int rc = zsock_connect(outSocket, "tcp://localhost:%d", outPort);
 	assert(rc == 0);
 
 #if DEBUG
-	std::cout << "Publisher created on port " << port << std::endl;
+	std::cout << "Input socket created on port " << outPort << std::endl;
+#endif
+
+	// create input socket on port inPort
+	zsock_t *inSocket = zsock_new(ZMQ_REP);
+	rc = zsock_bind(inSocket, "tcp://localhost:%d", inPort);
+	assert(rc == inPort);
+
+#if DEBUG
+	std::cout << "Output socket created on port " << inPort << std::endl;
 #endif
 
 	Tray::Tray tray("Keyboard Locker", unlockedIcon);
@@ -202,23 +214,57 @@ int main(int argc, char **argv) {
 	trayTitleLabelPtr = tray.addEntry(Tray::Label("Keyboard Locker"));
 	tray.addEntry(Tray::Separator());
 	trayMainTogglePtr = tray.addEntry(Tray::Toggle("Keyboard Lock", false, setLocked));
-	tray.addEntry(Tray::Button("Exit", [&] { tray.exit(); }));
-
+	tray.addEntry(Tray::Button("Exit", doExit));
 	trayMainTogglePtr->setDefault();
-
 	setLocked(false);
+
+	// set up poller for both in and out sockets
+	zpoller_t *poller = zpoller_new(inSocket, outSocket, NULL);
 
 	initialized = true;
 
-	tray.run(); // this blocks execution until tray is exited
+	while (running) {
+		tray.pump();
 
-	// close publisher socket
-	if (publisher != NULL)
-		zsock_destroy(&publisher);
+		// check for messages via poller
+		void *socket = zpoller_wait(poller, 0);
+		if (socket == inSocket) {
+			char *command;
+			char *state;
+			if (zstr_recvx(socket, &command, &state, NULL) > -1) {
+				if (strcmp(command, "ChangeKeyboardLockState") == 0) {
+					// set locked depending on state, which can be Toggle, Enable, or Disable, using a ternary operator
+					setLocked(strcmp(state, "Toggle") == 0 ? !lockStatus : strcmp(state, "Enable") == 0);
+				}
 
-	// unhook keyboard hook
-	if (hook != NULL)
-		UnhookWindowsHookEx(hook);
+				zstr_free(&command);
+				zstr_free(&state);
+			}
+
+			zstr_send(inSocket, "OK");
+		}
+		else if (socket == outSocket) {
+			char *msg = zstr_recv(socket);
+
+#if DEBUG
+			// log reply message
+			std::cout << "Reply: " << msg << std::endl;
+#endif
+
+			zstr_free(&msg);
+		}
+	}
+
+	// clean up
+	zpoller_destroy(&poller);
+	zsock_destroy(&inSocket);
+	zsock_destroy(&outSocket);
+	UnhookWindowsHookEx(hook);
+
+#if DEBUG
+	// print exiting
+	std::cout << "Exiting" << std::endl;
+#endif
 
 	return 0;
 }
