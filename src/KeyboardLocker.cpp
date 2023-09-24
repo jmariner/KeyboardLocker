@@ -11,7 +11,7 @@
 #define DEBUG true
 #define UNLOCK_STR "UNLOCK"
 #define UNLOCK_LEN 6
-#define PORT 5555
+#define DEF_PORT 5555
 
 // resources
 #define UNLOCKED_ICON 010
@@ -108,18 +108,29 @@ void setLocked(bool lockKeyboard) {
 	}
 }
 
-int main() {
+int main(int argc, char **argv) {
 
 	// set up keyboard hook
 	hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardHookCallback, NULL, 0);
 
-	// create publisher socket on port PORT
+	// parse args until -p or --port is found, then convert next arg to int
+	int port = DEF_PORT;
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) {
+			if (i + 1 < argc) {
+				port = atoi(argv[i + 1]);
+				break;
+			}
+		}
+	}
+
+	// create publisher socket on port
 	publisher = zsock_new(ZMQ_PUB);
-	int rc = zsock_connect(publisher, "tcp://localhost:%d", PORT);
+	int rc = zsock_connect(publisher, "tcp://localhost:%d", port);
 	assert(rc == 0);
 
 #if DEBUG
-	std::cout << "Publisher created on port " << PORT << std::endl;
+	std::cout << "Publisher created on port " << port << std::endl;
 #endif
 
 	Tray::Tray tray("Keyboard Locker", unlockedIcon);
