@@ -15,7 +15,7 @@
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",
-                    "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                    "value": "${sourceDir}/vendor/vcpkg/scripts/buildsystems/vcpkg.cmake"
                 },
                 "LIBRARY_OUTPUT_NAME": {
                     "type": "STRING",

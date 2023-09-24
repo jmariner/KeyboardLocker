@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(KeyboardLocker)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find dependencies provided by vcpkg (via vcpkg.cmake)
 find_package(czmq CONFIG REQUIRED)

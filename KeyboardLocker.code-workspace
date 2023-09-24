@@ -3,10 +3,5 @@
 		{
 			"path": "."
 		}
-	],
-	"settings": {
-		"clang.cflags": [
-			"-I${workspaceRoot}/build/vcpkg_installed/x64-windows/include"
-		],
-	}
+	]
 }
