@@ -1,4 +1,5 @@
 // https://www.unknowncheats.me/forum/c-and-c-/83707-setwindowshookex-example.html
+#include <components/toggle.hpp>
 #include <iostream>
 #include <algorithm>
 #include <memory>
@@ -27,11 +28,16 @@ std::vector<int> KEY_WHITELIST = {
 HHOOK hook = NULL;
 bool lockStatus = false;
 int disableStrCount = 0;
+int activeModifierKeys = 0;
+bool lockKeybindPressed = false;
 zsock_t *publisher = NULL;
 Tray::Tray *trayPtr;
 std::shared_ptr<Tray::Label> trayTitleLabelPtr;
+std::shared_ptr<Tray::Toggle> trayMainTogglePtr;
 Tray::Icon unlockedIcon(LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(UNLOCKED_ICON)));
 Tray::Icon lockedIcon(LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(LOCKED_ICON)));
+
+enum ModifierKeys { Alt = 1, Control = 2, Shift = 4, Win = 8 };
 
 void setLocked(bool);
 
@@ -77,7 +83,50 @@ LRESULT CALLBACK keyboardHookCallback(int nCode, WPARAM wParam, LPARAM lParam) {
 		}
 	}
 	else {
-		// TODO handle Ctrl+Alt+L to enable lock
+		// handle Ctrl+Alt+L to enable lock
+
+		// update active modifier keys
+		if (data.vkCode == VK_LMENU || data.vkCode == VK_RMENU) {
+			if (isKeyUp)
+				activeModifierKeys &= ~Alt;
+			else
+				activeModifierKeys |= Alt;
+		}
+		else if (data.vkCode == VK_LCONTROL || data.vkCode == VK_RCONTROL) {
+			if (isKeyUp)
+				activeModifierKeys &= ~Control;
+			else
+				activeModifierKeys |= Control;
+		}
+		else if (data.vkCode == VK_LSHIFT || data.vkCode == VK_RSHIFT) {
+			if (isKeyUp)
+				activeModifierKeys &= ~Shift;
+			else
+				activeModifierKeys |= Shift;
+		}
+		else if (data.vkCode == VK_LWIN || data.vkCode == VK_RWIN) {
+			if (isKeyUp)
+				activeModifierKeys &= ~Win;
+			else
+				activeModifierKeys |= Win;
+		}
+
+		// check if Ctrl+Alt+L is pressed
+		if (activeModifierKeys == (Control | Alt) && data.vkCode == 'L' && !isKeyUp) {
+			lockKeybindPressed = true;
+		}
+
+		// check if Ctrl+Alt+L are all released.
+		// TODO this will trigger while L is still pressed if Ctrl or Alt are released first. fix this if it becomes an issue
+		if (activeModifierKeys == 0 && lockKeybindPressed) {
+			lockKeybindPressed = false;
+			setLocked(true);
+		}
+
+#if DEBUG
+		if (activeModifierKeys > 0 && keyChar != 0)
+			std::cout << "Key " << keyChar << (isKeyUp ? " UP" : " DOWN") << " pressed with modifiers: " << activeModifierKeys << std::endl;
+#endif
 	}
 
 	return blockKey ? 1 : CallNextHookEx(hook, nCode, wParam, lParam);
@@ -89,14 +138,11 @@ void setLocked(bool lockKeyboard) {
 	bool changed = lockStatus != lockKeyboard;
 	lockStatus = lockKeyboard;
 
-#if DEBUG
-	std::cout << "Keyboard lock " << (lockStatus ? "enabled" : "disabled") << std::endl;
-#endif
-
 	// update tray icon
 	trayPtr->setIcon(lockStatus ? lockedIcon : unlockedIcon);
 	trayPtr->setTooltip(lockStatus ? "Keyboard Locked" : "Keyboard Unlocked");
 	trayTitleLabelPtr.get()->setText(lockStatus ? "Locked: Type \"UNLOCK\" to Unlock" : "Unlocked: Ctrl+Alt+L to Lock");
+	trayMainTogglePtr.get()->setToggledNoCallback(lockStatus);
 
 	if (changed) {
 		// play SFX
@@ -106,6 +152,10 @@ void setLocked(bool lockKeyboard) {
 		if (publisher != NULL)
 			zstr_sendx(publisher, "ChangeKeyboardLockState", lockStatus ? "true" : "false", NULL);
 	}
+
+#if DEBUG
+	std::cout << "Keyboard lock " << (lockStatus ? "enabled" : "disabled") << std::endl;
+#endif
 }
 
 int main(int argc, char **argv) {
@@ -139,8 +189,10 @@ int main(int argc, char **argv) {
 	// set up tray app
 	trayTitleLabelPtr = tray.addEntry(Tray::Label("Keyboard Locker"));
 	tray.addEntry(Tray::Separator());
-	tray.addEntry(Tray::Toggle("Keyboard Lock", false, setLocked))->setDefault();
+	trayMainTogglePtr = tray.addEntry(Tray::Toggle("Keyboard Lock", false, setLocked));
 	tray.addEntry(Tray::Button("Exit", [&] { tray.exit(); }));
+
+	trayMainTogglePtr->setDefault();
 
 	setLocked(false);
 
