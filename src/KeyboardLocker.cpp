@@ -8,7 +8,7 @@
 #include <tray.hpp>
 #include <czmq.h>
 
-#define DEBUG true
+#define DEBUG false
 #define UNLOCK_STR "UNLOCK"
 #define UNLOCK_LEN 6
 #define DEF_PORT 5555
@@ -163,6 +163,8 @@ void doExit() {
 }
 
 int main(int argc, char **argv) {
+
+	ShowWindow(GetConsoleWindow(), SW_HIDE);
 
 	// set up keyboard hook
 	hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardHookCallback, NULL, 0);

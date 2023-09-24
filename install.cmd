@@ -1,14 +1,14 @@
 @ECHO OFF
 
-: path to exe in build folder, relative to this file's directory
-SET BUILD_FILE=%~dp0build\KeyboardLocker.exe
-: path to exe in appdata
-SET DEST_FILE=%APPDATA%\KeyboardLocker\KeyboardLocker.exe
+: path to output folder, relative to this file's directory
+SET BUILD_DIR=%~dp0build\out\
+: path to app folder in appdata
+SET DEST_DIR=%APPDATA%\KeyboardLocker\
 
-: exit if build file doesn't exist
-IF NOT EXIST "%BUILD_FILE%" (
-    ECHO "Build file doesn't exist: %BUILD_FILE%"
-    EXIT
+: exit if no files in output folder
+IF NOT EXIST "%BUILD_DIR%" (
+    echo "No files in %BUILD_DIR%, exiting..."
+    exit
 )
 
 : if KeyboardLocker.exe is running, kill it
@@ -22,17 +22,18 @@ IF "%ERRORLEVEL%"=="0" (
 )
 
 : make a backup of the current KeyboardLocker.exe
-IF EXIST "%DEST_FILE%" (
+SET DEST_EXE=%DEST_DIR%KeyboardLocker.exe
+IF EXIST "%DEST_EXE%" (
     echo "Backing up current KeyboardLocker.exe..."
-    copy /Y "%DEST_FILE%" "%DEST_FILE%.bak"
+    copy /Y "%DEST_EXE%" "%DEST_EXE%.bak"
 )
 
 : create dest dir if it doesn't exist
-IF NOT EXIST "%APPDATA%\KeyboardLocker" (
-    echo "Creating %APPDATA%\KeyboardLocker..."
-    mkdir "%APPDATA%\KeyboardLocker"
+IF NOT EXIST "%DEST_DIR%" (
+    echo "Creating %DEST_DIR%..."
+    mkdir "%DEST_DIR%"
 )
 
-: copy KeyboardLocker.exe to dest
-echo "Copying KeyboardLocker.exe to %DEST_FILE%..."
-copy /Y build\KeyboardLocker.exe "%DEST_FILE%"
+: copy output files to dest
+echo "Copying output files to to %DEST_DIR%..."
+xcopy "%BUILD_DIR%" "%DEST_DIR%" /Q /E /Y /I
