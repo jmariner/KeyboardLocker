@@ -25,6 +25,7 @@ std::vector<int> KEY_WHITELIST = {
 
 // globals
 HHOOK hook = NULL;
+bool initialized = false;
 bool lockStatus = false;
 int disableStrCount = 0;
 int activeModifierKeys = 0;
@@ -146,10 +147,13 @@ void setLocked(bool lockKeyboard) {
 	if (changed) {
 		// play SFX
 		PlaySound(MAKEINTRESOURCE(lockStatus ? LOCK_SFX : UNLOCK_SFX), GetModuleHandle(nullptr), SND_RESOURCE | SND_ASYNC);
+	}
 
+	if (changed || !initialized) {
 		// update publisher if it exists
-		if (publisher != NULL)
+		if (publisher != NULL) {
 			zstr_sendx(publisher, "ChangeKeyboardLockState", lockStatus ? "true" : "false", NULL);
+		}
 	}
 
 #if DEBUG
@@ -173,6 +177,15 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	/*
+	On PUB/SUB vs REQ/REP:
+	  * PUB sends blind messages and doesn't need a reply, which is be ideal here,
+	    except that it doesn't guarantee that the message will be received.
+	    This also means PUB cannot send a message immediately after starting since it may not be connected yet.
+	  * REQ puts messages into a buffer so that they can be received later, which is be ideal here,
+	    but needs to receive a reply after every send, creating some kind of lag/hang when not connected while stuck waiting for a reply.
+	*/
+
 	// create publisher socket on port
 	publisher = zsock_new(ZMQ_PUB);
 	int rc = zsock_connect(publisher, "tcp://localhost:%d", port);
@@ -194,6 +207,8 @@ int main(int argc, char **argv) {
 	trayMainTogglePtr->setDefault();
 
 	setLocked(false);
+
+	initialized = true;
 
 	tray.run(); // this blocks execution until tray is exited
 
